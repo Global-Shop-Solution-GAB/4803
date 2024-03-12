@@ -1,0 +1,270 @@
+Program.Sub.ScreenSU.Start
+gui.F_AP_UPLOAD..create
+gui.F_AP_UPLOAD..caption("Invoice Upload from Concur")
+gui.F_AP_UPLOAD..size(4110,2580)
+gui.F_AP_UPLOAD..position(0,0)
+gui.F_AP_UPLOAD..event(resize,f_ap_upload_resize)
+gui.F_AP_UPLOAD..event(unload,f_ap_upload_unload)
+gui.F_AP_UPLOAD..alwaysontop(False)
+gui.F_AP_UPLOAD..fontname("Arial")
+gui.F_AP_UPLOAD..fontsize(8)
+gui.F_AP_UPLOAD..forecolor(0)
+gui.F_AP_UPLOAD..fontstyle(,,,,)
+gui.F_AP_UPLOAD..BackColor(-2147483633)
+gui.F_AP_UPLOAD..controlbox(True)
+gui.F_AP_UPLOAD..maxbutton(True)
+gui.F_AP_UPLOAD..minbutton(True)
+gui.F_AP_UPLOAD..mousepointer(0)
+gui.F_AP_UPLOAD..moveable(True)
+gui.F_AP_UPLOAD..sizeable(True)
+gui.F_AP_UPLOAD..ShowInTaskBar(True)
+gui.F_AP_UPLOAD..titlebar(True)
+gui.F_AP_UPLOAD.txtFile.create(textbox,"",True,3000,300,0,200,400,True,0,Arial,8,-2147483643,1)
+gui.F_AP_UPLOAD.dtpBatch.create(datepicker)
+gui.F_AP_UPLOAD.dtpBatch.visible(True)
+gui.F_AP_UPLOAD.dtpBatch.size(1935,300)
+gui.F_AP_UPLOAD.dtpBatch.zorder(0)
+gui.F_AP_UPLOAD.dtpBatch.position(200,955)
+gui.F_AP_UPLOAD.dtpBatch.enabled(True)
+gui.F_AP_UPLOAD.dtpBatch.checkbox(False)
+gui.F_AP_UPLOAD.lbl1.create(label,"File",True,1935,240,1,200,200,True,0,Arial,8,-2147483633,0)
+gui.F_AP_UPLOAD.lbl2.create(label,"Batch Date",True,1935,255,1,200,730,True,0,Arial,8,-2147483633,0)
+gui.F_AP_UPLOAD.cmdBrowser.create(button)
+gui.F_AP_UPLOAD.cmdBrowser.caption("^")
+gui.F_AP_UPLOAD.cmdBrowser.visible(True)
+gui.F_AP_UPLOAD.cmdBrowser.size(375,375)
+gui.F_AP_UPLOAD.cmdBrowser.zorder(0)
+gui.F_AP_UPLOAD.cmdBrowser.position(3215,360)
+gui.F_AP_UPLOAD.cmdBrowser.enabled(True)
+gui.F_AP_UPLOAD.cmdBrowser.fontname("Arial")
+gui.F_AP_UPLOAD.cmdBrowser.fontsize(8)
+gui.F_AP_UPLOAD.cmdBrowser.event(click,cmdbrowser_click)
+gui.F_AP_UPLOAD.cmdOK.create(button)
+gui.F_AP_UPLOAD.cmdOK.caption("OK")
+gui.F_AP_UPLOAD.cmdOK.visible(True)
+gui.F_AP_UPLOAD.cmdOK.size(855,375)
+gui.F_AP_UPLOAD.cmdOK.zorder(0)
+gui.F_AP_UPLOAD.cmdOK.position(200,1405)
+gui.F_AP_UPLOAD.cmdOK.enabled(True)
+gui.F_AP_UPLOAD.cmdOK.fontname("Arial")
+gui.F_AP_UPLOAD.cmdOK.fontsize(8)
+gui.F_AP_UPLOAD.cmdOK.event(click,cmdok_click)
+
+
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+
+Variable.UDT.uUpload.Define("Vendor",String)
+Variable.UDT.uUpload.Define("Invoice",String)
+Variable.UDT.uUpload.Define("GL",String)
+Variable.UDT.uUpload.Define("InvoiceDate",String)
+Variable.UDT.uUpload.Define("InvoiceAmt",String)
+Variable.UDT.uUpload.Define("InvoiceDDate",String)
+Variable.UDT.uUpload.Define("WO",String)
+Variable.UDT.uUpload.Define("Sfx",String)
+Variable.UDT.uUpload.Define("Column31",String)
+Variable.uGlobal.uUpload.Declare("uUpload")
+Variable.Global.BatchDate.Declare(String)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Coded by: JLH
+'Project Start Date: 8/10/2011
+'Other Components:
+'  Quote 2631
+'Notes:
+'  User will be able to select an file exported from Concur from a file browser and it will be uploaded into Global Shop Accounts Payable Open Item.
+'  See example txt file attached to call. Parse through the file to create a text file called APONITM.txt for upload using UPLAPOP. See GS File Conversion.doc pages 19-20 for upload format.
+
+F.ODBC.Connection!Conx.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+
+'F.Intrinsic.Debug.InvokeDebugger
+
+Gui.F_AP_UPLOAD..Show
+
+Program.Sub.Main.End
+
+program.sub.cmdok_click.start
+F.Intrinsic.Control.SetErrorHandler("Load_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.iRet.Declare(Long)
+V.Local.bRet.Declare(Boolean)
+V.Local.iCount.Declare(Long)
+V.Local.sRet.Declare(String)
+V.Local.sTemp.Declare(String)
+V.Local.iUB.Declare(Long)
+V.Local.dRet.Declare(Date)
+V.Local.sSeek.Declare(String)
+V.Local.sInvoice.Declare(String)
+
+'F.Intrinsic.Debug.InvokeDebugger
+'F.Intrinsic.Debug.Stop
+
+V.uGlobal.uUpload.Redim(-1,-1)
+
+' Added for HVS to pull batch date from date picker
+V.Global.BatchDate.Set(V.Screen.F_AP_UPLOAD!dtpBatch.Value)
+F.Intrinsic.String.Format(V.Global.BatchDate,"MMDDYY",V.Global.BatchDate)
+
+V.Local.sFile.Set(V.Screen.F_AP_UPLOAD!txtFile.Text)
+F.Intrinsic.File.Exists(V.local.sFile,V.Local.bRet)
+F.Intrinsic.Control.If(V.Local.bRet,=,True)
+	F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sText)
+'	F.Intrinsic.String.Replace(V.Local.sText,V.Ambient.DblQuote,"",V.local.sText)
+	F.Intrinsic.String.Split(V.Local.sText,V.Ambient.NewLine,V.Local.sText)
+	F.Intrinsic.Control.For(V.Local.iCount,1,V.Local.sText.UBound,1)
+		F.Intrinsic.Control.If(V.Local.sText(v.Local.iCount),<>,"")
+			F.Intrinsic.String.SplitCSV(V.Local.sText(v.Local.iCount),V.Local.sRet)
+'			F.Intrinsic.String.Split(V.Local.sText(v.Local.iCount),",",V.Local.sRet)
+			F.Intrinsic.Control.If(V.Local.sRet(1),<>,"")
+				F.Intrinsic.Control.If(V.uGlobal.uUpload.UBound,=,-1)
+					V.uGlobal.uUpload.Redim(0,0)
+				F.Intrinsic.Control.Else
+					V.Local.iUB.Set(V.uGlobal.uUpload.UBound)
+					F.Intrinsic.Math.Add(V.Local.iUB,1,V.Local.iUB)
+					V.uGlobal.uUpload.RedimPreserve(0,V.Local.iUB)
+				F.Intrinsic.Control.EndIf
+				'Vendor # and reserved 6 + 1
+				V.uGlobal.uUpload(v.Local.iUB)!Vendor.Set(V.Local.sRet(1))
+				F.Intrinsic.String.Right(V.Local.sRet(4),15,V.Local.sInvoice)
+				'Invoice Date and filler MMDDYY 6+5
+				F.Intrinsic.Debug.Stop
+				F.Intrinsic.Variable.UDTSeek(V.uGlobal.uUpload!Invoice,V.Local.sInvoice,4,V.Local.sSeek)
+				F.Intrinsic.Control.If(V.Local.sSeek,<>,"")
+					V.uGlobal.uUpload(v.Local.iUB)!InvoiceDate.Set(V.uGlobal.uUpload(v.Local.sSeek)!InvoiceDate)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.String.Format(V.local.sRet(10),"MMDDYY",V.Local.sTemp)
+					V.uGlobal.uUpload(v.Local.iUB)!InvoiceDate.Set(V.Local.sTemp)
+				F.Intrinsic.Control.EndIf
+				'Invoice 15
+				V.uGlobal.uUpload(v.Local.iUB)!Invoice.Set(V.Local.sInvoice)
+				'GL Acct 15 - HVS modification
+				V.uGlobal.uUpload(v.Local.iUB)!GL.Set(V.Local.sRet(23))
+				'F.Intrinsic.String.Concat(V.Local.sRet(23),"-",V.Local.sRet(29),V.Local.sTemp)
+				'V.uGlobal.uUpload(v.Local.iUB)!GL.Set(V.Local.sTemp)
+				'Invoice Amt 16
+				F.Intrinsic.String.Replace(V.Local.sRet(22),"$","",V.Local.sTemp)
+				F.Intrinsic.String.Format(V.Local.sTemp,"##############.00",V.Local.sTemp)
+				V.uGlobal.uUpload(v.Local.iUB)!InvoiceAmt.Set(V.Local.sTemp)
+				'Invoice Due Date MMDDYY 6
+'				V.Local.dRet.Set(V.local.sRet(0))
+'				F.Intrinsic.Date.DateAdd("D",3,V.Local.dRet,V.Local.sTemp)
+'				F.Intrinsic.String.Format(V.Local.sTemp,"MMDDYY",V.Local.sTemp)
+'				V.uGlobal.uUpload(v.Local.iUB)!InvoiceDDate.Set(V.Local.sTemp)
+				'Job/WO 6 - HVS modification
+				V.uGlobal.uUpload(v.Local.iUB)!WO.Set(V.Local.sRet(29))
+				'V.uGlobal.uUpload(v.Local.iUB)!WO.Set(V.Local.sRet(28))
+				F.Intrinsic.String.Right(V.Local.sRet(30),15,V.Local.sRet(30))
+				V.uGlobal.uUpload(v.Local.iUB)!Column31.Set(V.Local.sRet(30))
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.iCount)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.CallSub(Buildfile)
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Load_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_AP_Concur_Upload.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(F_ap_upload_unload)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.cmdok_click.end
+
+program.sub.cmdbrowser_click.start
+F.Intrinsic.Control.SetErrorHandler("Load_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.bRet.Declare(Boolean)
+
+
+'F.Intrinsic.Debug.Stop
+
+F.Intrinsic.UI.ShowOpenFileDialog("",".csv","",V.Local.sFile)
+F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+F.Intrinsic.Control.If(V.Local.bRet,=,True)
+	Gui.F_AP_UPLOAD.txtFile.text(V.Local.sFile)
+F.Intrinsic.Control.EndIf
+
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Load_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_AP_Concur_Upload.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(F_ap_upload_unload)
+Function.Intrinsic.Control.EndIf
+
+program.sub.cmdbrowser_click.end
+
+program.sub.f_ap_upload_unload.start
+F.Intrinsic.Control.End
+
+program.sub.f_ap_upload_unload.end
+
+program.sub.f_ap_upload_resize.start
+
+
+program.sub.f_ap_upload_resize.end
+
+Program.Sub.Buildfile.Start
+F.Intrinsic.Control.SetErrorHandler("Load_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sFile.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.bRet.Declare(Boolean)
+V.Local.iCount.Declare(Long)
+V.Local.sTemp.Declare(String)
+V.Local.sParam.Declare(String)
+
+F.Intrinsic.Debug.Stop
+
+F.Intrinsic.Control.For(V.Local.iCount,0,V.uGlobal.uUpload.UBound,1)
+	F.Intrinsic.Control.If(V.Local.iCount,<>,0)
+		F.Intrinsic.String.Concat(V.Local.sText,V.Ambient.NewLine,V.Local.sText)
+	F.Intrinsic.Control.EndIf
+	' Added for HVS to pull batch date from date picker
+	F.Intrinsic.String.Concat(V.Local.sText,V.Global.BatchDate,"*!*",V.uGlobal.uUpload(v.Local.iCount)!Vendor,"*!*",V.uGlobal.uUpload(v.Local.iCount)!Invoice,"*!*",V.uGlobal.uUpload(v.Local.iCount)!InvoiceDate,V.Local.sText)
+	'F.Intrinsic.String.Concat(V.Local.sText,V.uGlobal.uUpload(v.Local.iCount)!InvoiceDDate,"*!*",V.uGlobal.uUpload(v.Local.iCount)!Vendor,"*!*",V.uGlobal.uUpload(v.Local.iCount)!Invoice,"*!*",V.uGlobal.uUpload(v.Local.iCount)!InvoiceDate,V.Local.sText)
+	'F.Intrinsic.String.Concat(V.Local.sText,"*!*",V.uGlobal.uUpload(v.Local.iCount)!InvoiceAmt,"*!*",V.uGlobal.uUpload(v.Local.iCount)!GL,"*!*",V.uGlobal.uUpload(v.Local.iCount)!WO,"*!*","*!*",V.Local.sText)
+	F.Intrinsic.String.Concat(V.Local.sText,"*!*",V.uGlobal.uUpload(v.Local.iCount)!InvoiceAmt,"*!*",V.uGlobal.uUpload(v.Local.iCount)!GL,"*!*",V.uGlobal.uUpload(v.Local.iCount)!WO,"*!*",V.uGlobal.uUpload(v.Local.iCount)!Column31,"*!*","*!*",V.Local.sText)
+
+F.Intrinsic.Control.Next(V.Local.iCount)
+
+F.Intrinsic.Debug.Stop
+
+F.Intrinsic.String.Concat(V.caller.FilesDir,"\APBatch_Upload.TXT",V.Local.sFile)
+F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sText)
+'F.Global.General.CallWrapperSync(50,"AP043UPL")
+'F.Global.General.CallWrapperSync(50,"AP043UP1")
+F.Intrinsic.Task.LaunchGSSSync("AP043UP1","-c","")
+
+F.Intrinsic.UI.Msgbox("AP batches created")
+F.Intrinsic.Control.CallSub(F_ap_upload_unload)
+
+
+F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.Label("Load_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_AP_Concur_Upload.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Buildfile.End
+
+
+
